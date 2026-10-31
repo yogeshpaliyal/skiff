@@ -35,6 +35,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -89,6 +90,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -98,6 +100,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -169,6 +173,9 @@ private fun AppTheme(content: @Composable () -> Unit) {
 
 private const val PREFS = "remote"
 
+/** Search results shown at a time; the next ones as the list is scrolled to its end. */
+private const val SEARCH_PAGE = 8
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun RemoteScreen(shared: Title.Shared?, onSharedUsed: () -> Unit, openScreen: String?, onOpenScreenUsed: () -> Unit) {
@@ -191,6 +198,7 @@ private fun RemoteScreen(shared: Title.Shared?, onSharedUsed: () -> Unit, openSc
         }
     }
     @Suppress("DEPRECATION") val clipboard = LocalClipboardManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
 
     // The TV
     var host by remember { mutableStateOf(prefs.getString("host", "").orEmpty()) }
@@ -258,7 +266,11 @@ private fun RemoteScreen(shared: Title.Shared?, onSharedUsed: () -> Unit, openSc
     var keepType by remember { mutableStateOf(false) }
     // Typed words that aren't a link or an IMDb id: a title search (Cinemeta), its results under the box.
     var hits by remember { mutableStateOf(emptyList<Meta.Hit>()) }
+    var hitsFor by remember { mutableStateOf("") }      // the words those were found for: others typed since, not shown
+    var shownHits by remember { mutableIntStateOf(SEARCH_PAGE) }     // a page at a time, more as the list is scrolled
     var findingTitles by remember { mutableStateOf(false) }
+    var searchNow by remember { mutableIntStateOf(0) }      // the keyboard's Search: no waiting for more typing
+    var searchedNow by remember { mutableIntStateOf(0) }
     // Or any other link (JioHotstar, YouTube…): opened on the TV by the app that opens such links.
     var link by remember { mutableStateOf<String?>(null) }
     var linkTitle by remember { mutableStateOf("") }       // what the share called it, until the page says
@@ -640,6 +652,7 @@ private fun RemoteScreen(shared: Title.Shared?, onSharedUsed: () -> Unit, openSc
         searching -> stringResource(R.string.looking_for_tvs)
         else -> stringResource(R.string.pick_a_tv)
     }
+    val scroll = rememberScrollState()
     Scaffold(
         topBar = {
             TopAppBar(
@@ -683,7 +696,7 @@ private fun RemoteScreen(shared: Title.Shared?, onSharedUsed: () -> Unit, openSc
                 .padding(inner)
                 .consumeWindowInsets(inner)     // the keyboard's room counts the bars' already given
                 .imePadding()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scroll)
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -726,14 +739,29 @@ private fun RemoteScreen(shared: Title.Shared?, onSharedUsed: () -> Unit, openSc
 
             // MARK: What to watch: the search box first.
             val query = if (link == null && !Title.isImdbId(imdbId)) imdbId.trim() else ""
-            LaunchedEffect(query) {
-                if (query.length < 2) { hits = emptyList(); findingTitles = false; return@LaunchedEffect }
-                delay(350)      // typing: search once the word is there
+            LaunchedEffect(query, searchNow) {
+                if (query.length < 2) { hits = emptyList(); hitsFor = ""; findingTitles = false; return@LaunchedEffect }
+                if (hitsFor == query && hits.isNotEmpty()) return@LaunchedEffect     // Search pressed: already found
+                if (searchNow == searchedNow) delay(350)      // typing: search once the word is there
+                searchedNow = searchNow
                 findingTitles = true
-                hits = Meta.search(query)
+                val found = Meta.search(query)
+                hits = found
+                hitsFor = query
+                shownHits = SEARCH_PAGE
                 findingTitles = false
                 // How many were found, never what was typed.
-                Telemetry.event(context, "title_search", "results" to hits.size)
+                Telemetry.event(context, "title_search", "results" to found.size)
+            }
+            // Near the end of the page with more found than shown: the next page.
+            val nearEnd = with(LocalDensity.current) { 480.dp.roundToPx() }
+            LaunchedEffect(scroll) {
+                snapshotFlow { Triple(scroll.maxValue - scroll.value, shownHits, hits.size) }.collect { (left, shown, all) ->
+                    if (hitsFor.isNotEmpty() && shown < all && left < nearEnd) {
+                        shownHits = shown + SEARCH_PAGE
+                        Telemetry.event(context, "search_more", "shown" to minOf(shownHits, all))
+                    }
+                }
             }
             OutlinedTextField(
                 value = sourceLink ?: link ?: imdbId,
@@ -777,6 +805,7 @@ private fun RemoteScreen(shared: Title.Shared?, onSharedUsed: () -> Unit, openSc
                     status = null
                     failed = false
                     hits = emptyList()
+                    hitsFor = ""
                     Telemetry.event(context, "clear_input")
                         }) { Icon(Icons.Rounded.Close, stringResource(R.string.clear)) }
                     } else {
@@ -796,13 +825,18 @@ private fun RemoteScreen(shared: Title.Shared?, onSharedUsed: () -> Unit, openSc
                     }
                 },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = {
+                    keyboard?.hide()        // the results under the box, in view
+                    if (query.length >= 2) searchNow++
+                }),
                 modifier = Modifier.fillMaxWidth(),
             )
 
             // A search: the titles found, one tap fills it in (as a shared IMDb page does).
             if (query.length >= 2) {
+                val current = hitsFor == query
                 when {
-                    hits.isNotEmpty() -> for ((i, h) in hits.withIndex()) {
+                    current && hits.isNotEmpty() -> for ((i, h) in hits.take(shownHits).withIndex()) {
                         SearchHitRow(h) {
                             Telemetry.event(context, "search_pick", "position" to i, "series" to h.series)
                             imdbId = h.imdbId
@@ -811,10 +845,11 @@ private fun RemoteScreen(shared: Title.Shared?, onSharedUsed: () -> Unit, openSc
                             autoName = true
                             keepType = false
                             hits = emptyList()
+                            hitsFor = ""
                             status = null
                         }
                     }
-                    findingTitles -> Row(verticalAlignment = Alignment.CenterVertically) {
+                    findingTitles || !current -> Row(verticalAlignment = Alignment.CenterVertically) {
                         LoadingIndicator(Modifier.size(32.dp))
                         Spacer(Modifier.width(12.dp))
                         Text(stringResource(R.string.searching), style = MaterialTheme.typography.bodyMedium)
