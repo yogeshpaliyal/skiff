@@ -3,6 +3,7 @@ package dev.skiff
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -31,13 +32,39 @@ object Meta {
     data class Hit(val imdbId: String, val name: String, val series: Boolean, val year: String?, val poster: String?)
 
     /**
-     * Off the main thread. Titles whose name matches `query`, movies and series asked at once and taken in turn
-     * (the best of each first), up to `limit`. Only the words typed go to Cinemeta. Empty on no match or no internet.
+     * The words typed, as Cinemeta should get them: every run of spaces of any kind (a keyboard's no-break or thin
+     * space, a tab, two spaces in a row) one plain space, and the invisible characters some keyboards add removed.
      */
-    suspend fun search(query: String, limit: Int = 8): List<Hit> = coroutineScope {
-        val q = java.net.URLEncoder.encode(query.trim(), "UTF-8").replace("+", "%20")
-        val movies = async { catalog("movie", q) }
-        val series = async { catalog("series", q) }
+    fun words(query: String): String =
+        query.replace(INVISIBLE, "").split(SPACES).filter { it.isNotEmpty() }.joinToString(" ")
+
+    private val SPACES = Regex("""[\s\p{Z}]+""")
+    private val INVISIBLE = Regex("""[\u200B-\u200D\u2060\uFEFF]""")
+
+    /** The catalog address for a search: the words percent-encoded, a space as %20 (a "+" is a plus in a path). */
+    fun searchUrl(type: String, query: String): String =
+        "$CATALOG/$type/top/search=${java.net.URLEncoder.encode(words(query), "UTF-8").replace("+", "%20")}.json"
+
+    /**
+     * Off the main thread. Titles whose name matches `query`, movies and series asked at once and taken in turn
+     * (the best of each first), up to `limit`. Only the words typed go to Cinemeta. When several words find nothing,
+     * the last ones are let go of, one at a time and at most two (an extra word, a typo at the end). Empty on no match
+     * or no internet.
+     */
+    suspend fun search(query: String, limit: Int = Int.MAX_VALUE): List<Hit> {
+        val all = words(query).split(" ").filter { it.isNotEmpty() }
+        for (n in all.size downTo maxOf(1, all.size - 2)) {
+            val q = all.take(n).joinToString(" ")
+            if (n < all.size && q.length < 3) break     // one short word left: too broad to stand for what was typed
+            val hits = searchOnce(q, limit)
+            if (hits.isNotEmpty()) return hits
+        }
+        return emptyList()
+    }
+
+    private suspend fun searchOnce(query: String, limit: Int): List<Hit> = coroutineScope {
+        val movies = async { catalog("movie", query) }
+        val series = async { catalog("series", query) }
         val m = movies.await()
         val s = series.await()
         buildList { for (i in 0 until maxOf(m.size, s.size)) { m.getOrNull(i)?.let(::add); s.getOrNull(i)?.let(::add) } }
@@ -45,9 +72,9 @@ object Meta {
             .take(limit)
     }
 
-    private suspend fun catalog(type: String, q: String): List<Hit> = withContext(Dispatchers.IO) {
+    private suspend fun catalog(type: String, query: String): List<Hit> = withContext(Dispatchers.IO) {
         runCatching {
-            val c = URL("$CATALOG/$type/top/search=$q.json").openConnection() as HttpURLConnection
+            val c = URL(searchUrl(type, query)).openConnection() as HttpURLConnection
             c.connectTimeout = 6000
             c.readTimeout = 8000
             try {
@@ -67,7 +94,7 @@ object Meta {
             } finally {
                 c.disconnect()
             }
-        }.getOrDefault(emptyList())
+        }.getOrDefault(emptyList()).also { ensureActive() }     // typed on meanwhile: not these
     }
 
     /** Off the main thread; null when neither knows it (or there's no internet). */
