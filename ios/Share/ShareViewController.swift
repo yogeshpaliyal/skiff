@@ -36,12 +36,19 @@ final class ShareViewController: UIViewController {
         extensionContext?.completeRequest(returningItems: nil)
     }
 
-    /** A share extension can't open its app directly: the responder chain reaches the application, which can. */
+    /**
+     * A share extension can't open its app directly (UIApplication.open is unavailable to extensions), but the
+     * responder chain reaches the application, which can: its open(_:options:completionHandler:) is called by
+     * selector, as extensions are built with the extension-only API set.
+     */
     private func open(_ url: URL) {
+        let selector = NSSelectorFromString("openURL:options:completionHandler:")
         var responder: UIResponder? = self
         while let r = responder {
-            if let app = r as? UIApplication {
-                app.open(url, options: [:], completionHandler: nil)
+            if r is UIApplication, r.responds(to: selector) {
+                typealias Open = @convention(c) (AnyObject, Selector, NSURL, NSDictionary, AnyObject?) -> Void
+                let open = unsafeBitCast(r.method(for: selector), to: Open.self)
+                open(r, selector, url as NSURL, NSDictionary(), nil)
                 return
             }
             responder = r.next

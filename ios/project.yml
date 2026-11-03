@@ -92,8 +92,6 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: dev.skiff.share
         PRODUCT_NAME: SkiffShare
         TARGETED_DEVICE_FAMILY: "1,2"
-        # It opens Skiff through the responder chain (UIApplication.open), which the extension-only API set leaves out.
-        APPLICATION_EXTENSION_API_ONLY: NO
   SkiffTests:
     type: bundle.unit-test
     platform: iOS
