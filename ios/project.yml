@@ -1,0 +1,116 @@
+# The Xcode project, as XcodeGen makes it (brew install xcodegen; then `xcodegen` in this folder). The .xcodeproj
+# itself isn't kept in git: this file is the source of truth, so a project file never has merge conflicts.
+name: Skiff
+options:
+  bundleIdPrefix: dev.skiff
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    # CI passes the version from ../version.properties (the same as the Android app's).
+    MARKETING_VERSION: "1.11.1"
+    CURRENT_PROJECT_VERSION: "16"
+    SWIFT_VERSION: "5.0"
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+targets:
+  Skiff:
+    type: application
+    platform: iOS
+    sources:
+      - path: Skiff
+      # The link rules: the same file the Android app ships (RULES.md).
+      - path: ../app/src/main/assets/rules.json
+        buildPhase: resources
+    dependencies:
+      - target: SkiffShare
+    info:
+      path: Skiff/Info.plist
+      properties:
+        CFBundleDisplayName: Skiff
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSRequiresIPhoneOS: true
+        ITSAppUsesNonExemptEncryption: false
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        # Finding the TVs on the Wi-Fi, and talking to them.
+        NSLocalNetworkUsageDescription: Skiff finds your TVs on the Wi-Fi and sends what you pick to them.
+        NSBonjourServices:
+          - _androidtvremote2._tcp
+          - _adb._tcp
+        # Web pages shared to Skiff may be plain http: their title is read.
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+        NSMotionUsageDescription: Turning the phone moves the TV's cursor (Air).
+        CFBundleURLTypes:
+          - CFBundleURLName: dev.skiff
+            CFBundleURLSchemes: [skiff]
+        UIApplicationShortcutItems:
+          - UIApplicationShortcutItemType: dev.skiff.remote
+            UIApplicationShortcutItemTitle: Remote
+            UIApplicationShortcutItemIconSymbolName: av.remote
+          - UIApplicationShortcutItemType: dev.skiff.library
+            UIApplicationShortcutItemTitle: History
+            UIApplicationShortcutItemIconSymbolName: clock.arrow.circlepath
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.skiff
+        PRODUCT_NAME: Skiff
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+  SkiffShare:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Share
+    info:
+      path: Share/Info.plist
+      properties:
+        CFBundleDisplayName: Skiff
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsWebURLWithMaxCount: 1
+              NSExtensionActivationSupportsText: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.skiff.share
+        PRODUCT_NAME: SkiffShare
+        TARGETED_DEVICE_FAMILY: "1,2"
+        # It opens Skiff through the responder chain (UIApplication.open), which the extension-only API set leaves out.
+        APPLICATION_EXTENSION_API_ONLY: NO
+  SkiffTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: SkiffTests
+    dependencies:
+      - target: Skiff
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.skiff.tests
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  Skiff:
+    build:
+      targets:
+        Skiff: all
+        SkiffTests: [test]
+    test:
+      targets:
+        - SkiffTests

@@ -5,7 +5,8 @@ name: Release
 #  2. builds the github flavor's APK (for GitHub) and the play flavor's app bundle (.aab, for Google Play), signed
 #     with the release key (repo secrets);
 #  3. only if that works: commits version.properties to main;
-#  4. tags that commit (v1.9.0) and publishes the release with both files.
+#  4. tags that commit (v1.9.0) and publishes the release with both files;
+#  5. then (ios.yml, on a Mac) builds the iOS app's .ipa from that tag and attaches it to the release.
 on:
   workflow_dispatch:
     inputs:
@@ -27,6 +28,8 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -108,3 +111,11 @@ jobs:
             skiff-*.apk
             skiff-*.aab
           generate_release_notes: true
+
+  # The iOS app, from the same tag: its .ipa joins the release (ios.yml).
+  ios:
+    needs: release
+    uses: ./.github/workflows/ios.yml
+    with:
+      tag: ${{ needs.release.outputs.tag }}
+    secrets: inherit

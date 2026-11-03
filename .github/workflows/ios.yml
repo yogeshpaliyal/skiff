@@ -1,0 +1,148 @@
+name: iOS
+
+# The iOS app (ios/): built and tested on a Mac, and its .ipa made.
+#  - Pull requests and main (when ios/ or the link rules change): a check that it builds and its tests pass; the
+#    .ipa is kept as the run's artifact for a week, to try it before a release.
+#  - Release (release.yml calls this with the new tag), or Actions → iOS → Run workflow with a tag: the .ipa is
+#    attached to that GitHub release.
+#
+# The .ipa is unsigned unless the signing secrets are set (see ios/README.md): sideload it with AltStore, SideStore,
+# Sideloadly or similar, which sign it with your Apple ID.
+on:
+  pull_request:
+    paths:
+      - "ios/**"
+      - "app/src/main/assets/rules.json"
+      - "version.properties"
+      - ".github/workflows/ios.yml"
+  push:
+    branches: [main]
+    paths:
+      - "ios/**"
+      - "app/src/main/assets/rules.json"
+      - ".github/workflows/ios.yml"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "A release's tag (v1.12.0): its .ipa is built from that tag and attached to it. Empty: build only."
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  ios:
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      TAG: ${{ inputs.tag }}
+      SIGNING: ${{ secrets.IOS_CERTIFICATE_P12_BASE64 != '' && secrets.IOS_PROVISIONING_PROFILE_BASE64 != '' && secrets.IOS_SHARE_PROVISIONING_PROFILE_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Tools
+        run: |
+          brew install xcodegen
+          xcodebuild -version
+
+      - name: Version (version.properties, as the Android app)
+        id: version
+        run: |
+          name=$(grep '^versionName=' version.properties | cut -d= -f2)
+          code=$(grep '^versionCode=' version.properties | cut -d= -f2)
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "Skiff $name ($code)"
+
+      - name: Make the Xcode project
+        working-directory: ios
+        run: xcodegen generate
+
+      - name: Unit tests (simulator)
+        if: inputs.tag == ''
+        working-directory: ios
+        run: |
+          udid=$(xcrun simctl list devices available -j | jq -r '[.devices | to_entries[] | select(.key | contains("iOS")) | .value[] | select(.name | startswith("iPhone"))][0].udid')
+          echo "Simulator: $udid"
+          set -o pipefail
+          xcodebuild test -project Skiff.xcodeproj -scheme Skiff -destination "id=$udid" \
+            CODE_SIGNING_ALLOWED=NO | tee "$RUNNER_TEMP/test.log" | grep -E '(error|warning: unre|Test Suite|Test Case .* failed|\*\* )' || true
+          grep -q '\*\* TEST SUCCEEDED \*\*' "$RUNNER_TEMP/test.log" || { tail -150 "$RUNNER_TEMP/test.log"; exit 1; }
+
+      - name: Build the app (device, unsigned)
+        working-directory: ios
+        env:
+          NAME: ${{ steps.version.outputs.name }}
+          CODE: ${{ steps.version.outputs.code }}
+        run: |
+          set -o pipefail
+          xcodebuild archive -project Skiff.xcodeproj -scheme Skiff -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/Skiff.xcarchive" \
+            MARKETING_VERSION="$NAME" CURRENT_PROJECT_VERSION="$CODE" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" | tee "$RUNNER_TEMP/build.log" | grep -E '(error:|\*\* )' || true
+          test -d "$RUNNER_TEMP/Skiff.xcarchive/Products/Applications/Skiff.app" || { tail -150 "$RUNNER_TEMP/build.log"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/ipa/Payload"
+          cp -R "$RUNNER_TEMP/Skiff.xcarchive/Products/Applications/Skiff.app" "$RUNNER_TEMP/ipa/Payload/"
+
+      # Optional: signed with your certificate and provisioning profiles (repo secrets), so it installs without a
+      # sideloading app. Without the secrets, this is skipped and the .ipa stays unsigned.
+      - name: Sign (when the signing secrets are set)
+        env:
+          P12: ${{ secrets.IOS_CERTIFICATE_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          APP_PROFILE: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+          SHARE_PROFILE: ${{ secrets.IOS_SHARE_PROVISIONING_PROFILE_BASE64 }}
+        if: env.SIGNING == 'true'
+        run: |
+          set -e
+          kc="$RUNNER_TEMP/signing.keychain-db"
+          security create-keychain -p ci "$kc"
+          security set-keychain-settings -lut 3600 "$kc"
+          security unlock-keychain -p ci "$kc"
+          echo "$P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$kc" -P "$P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k ci "$kc" >/dev/null
+          security list-keychains -d user -s "$kc" $(security list-keychains -d user | tr -d '"')
+          identity=$(security find-identity -v -p codesigning "$kc" | head -1 | awk '{print $2}')
+          app="$RUNNER_TEMP/ipa/Payload/Skiff.app"
+          sign() {   # sign <bundle> <profile base64>
+            echo "$2" | base64 --decode > "$RUNNER_TEMP/p.mobileprovision"
+            cp "$RUNNER_TEMP/p.mobileprovision" "$1/embedded.mobileprovision"
+            security cms -D -i "$RUNNER_TEMP/p.mobileprovision" > "$RUNNER_TEMP/p.plist"
+            /usr/libexec/PlistBuddy -x -c 'Print :Entitlements' "$RUNNER_TEMP/p.plist" > "$RUNNER_TEMP/e.plist"
+            codesign --force --sign "$identity" --entitlements "$RUNNER_TEMP/e.plist" --keychain "$kc" "$1"
+          }
+          sign "$app/PlugIns/SkiffShare.appex" "$SHARE_PROFILE"
+          sign "$app" "$APP_PROFILE"
+          codesign --verify --deep --strict "$app"
+          echo "Signed with $identity"
+
+      - name: Make the .ipa
+        env:
+          NAME: ${{ steps.version.outputs.name }}
+        run: |
+          cd "$RUNNER_TEMP/ipa"
+          zip -qry "$GITHUB_WORKSPACE/skiff-$NAME.ipa" Payload
+          ls -l "$GITHUB_WORKSPACE"/skiff-*.ipa
+
+      - name: Keep it with the run (a week)
+        if: inputs.tag == ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: skiff-ios-${{ steps.version.outputs.name }}
+          path: skiff-*.ipa
+          retention-days: 7
+
+      - name: Attach it to the release
+        if: inputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" skiff-*.ipa --clobber --repo "$GITHUB_REPOSITORY"
