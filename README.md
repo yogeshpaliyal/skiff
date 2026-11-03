@@ -125,6 +125,15 @@ Get the APK from [Releases](../../releases/latest). Up to 1.2.0 the app was *Nuv
 (`dev.skiff`) is a new app for Android, so uninstall the old one. Every release is signed with the same release key,
 so a new version installs over the old one.
 
+## iPhone and iPad
+
+Skiff for iOS ([ios/](ios)) does the same: titles by name, IMDb, Trakt, Simkl, Letterboxd, MDBList and WeTrakr pages,
+any other link, pairing with the code the TV shows, USB debugging, the remote (with the cursor and Air), History and
+Saved for later, and the ADB tools. Share a page to **Skiff** from Safari or any app's share sheet. Each release has
+its `.ipa` beside the APK: install it with AltStore, SideStore or Sideloadly. Details, and what differs on iOS:
+[ios/README.md](ios/README.md). Kotlin Multiplatform, to share the code between the two apps, is the
+[plan](docs/KMP-ROADMAP.md).
+
 ## Build
 
 ```bash
@@ -146,4 +155,5 @@ when `KEYSTORE_FILE`, `KEYSTORE_PASSWORD` and `KEY_ALIAS` are set.
 
 **Releasing:** Actions → Release → Run workflow, and pick patch, minor or major. The
 [release workflow](.github/workflows/release.yml) raises the version, builds and signs the APK and app bundle with the
-repo's secrets, and only then commits the new version to `main`, tags it (`v1.9.0`) and publishes the release.
+repo's secrets, and only then commits the new version to `main`, tags it (`v1.9.0`) and publishes the release. Then a
+Mac builds the iOS app's `.ipa` from that tag and attaches it to the release ([ios.yml](.github/workflows/ios.yml)).

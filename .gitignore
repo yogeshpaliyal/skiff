@@ -5,3 +5,12 @@ local.properties
 *.iml
 .DS_Store
 dist/
+
+# iOS: the Xcode project and Info.plists are made by XcodeGen from ios/project.yml.
+ios/*.xcodeproj/
+ios/Skiff/Info.plist
+ios/Share/Info.plist
+ios/build/
+ios/DerivedData/
+*.ipa
+xcuserdata/
