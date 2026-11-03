@@ -28,18 +28,32 @@ final class Socket: @unchecked Sendable {
     }
 
     private let conn: NWConnection
-    private let queue = DispatchQueue(label: "dev.skiff.socket")
+    private let queue: DispatchQueue
     private var buffer = Data()
     private let lock = NSLock()
-    private var _peer: SecCertificate?
+    private let peer: Peer
     private var _closed = false
     private var connectWaiter: CheckedContinuation<Void, Error>?
 
     /** The TV's certificate, once the TLS handshake is done. */
-    var peerCertificate: SecCertificate? { lock.withLock { _peer } }
+    var peerCertificate: SecCertificate? { peer.certificate }
+
+    /** Where the TLS verify block puts the TV's certificate (it's made before the socket is, so it can't hold self). */
+    private final class Peer: @unchecked Sendable {
+        private let lock = NSLock()
+        private var cert: SecCertificate?
+        var certificate: SecCertificate? {
+            get { lock.withLock { cert } }
+            set { lock.withLock { cert = newValue } }
+        }
+    }
     var isClosed: Bool { lock.withLock { _closed } }
 
     init(host: String, port: UInt16, tls: Tls? = nil) {
+        let queue = DispatchQueue(label: "dev.skiff.socket")
+        let peer = Peer()
+        self.queue = queue
+        self.peer = peer
         let tcp = NWProtocolTCP.Options()
         tcp.noDelay = true
         tcp.connectionTimeout = 5
@@ -53,10 +67,10 @@ final class Socket: @unchecked Sendable {
             let pinned = tls.pinned
             // The TV's certificate is self-signed (no authority to check it against): any is accepted to pair with,
             // and after that only the one paired with (trust on first use, like SSH).
-            sec_protocol_options_set_verify_block(sec, { [weak self] _, trust, complete in
+            sec_protocol_options_set_verify_block(sec, { _, trust, complete in
                 let secTrust = sec_trust_copy_ref(trust).takeRetainedValue()
                 let leaf = (SecTrustCopyCertificateChain(secTrust) as? [SecCertificate])?.first
-                self?.lock.withLock { self?._peer = leaf }
+                peer.certificate = leaf
                 if let pinned {
                     complete(leaf.map { Socket.fingerprint($0) == pinned } ?? false)
                 } else {

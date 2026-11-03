@@ -75,7 +75,7 @@ jobs:
           set -o pipefail
           xcodebuild test -project Skiff.xcodeproj -scheme Skiff -destination "id=$udid" \
             CODE_SIGNING_ALLOWED=NO | tee "$RUNNER_TEMP/test.log" | grep -E '(error|warning: unre|Test Suite|Test Case .* failed|\*\* )' || true
-          grep -q '\*\* TEST SUCCEEDED \*\*' "$RUNNER_TEMP/test.log" || { tail -150 "$RUNNER_TEMP/test.log"; exit 1; }
+          grep -q '\*\* TEST SUCCEEDED \*\*' "$RUNNER_TEMP/test.log" || { tail -150 "$RUNNER_TEMP/test.log"; echo "::group::Errors"; grep -E ': error:' "$RUNNER_TEMP/test.log" | sort -u; echo "::endgroup::"; exit 1; }
 
       - name: Build the app (device, unsigned)
         working-directory: ios
@@ -88,7 +88,7 @@ jobs:
             -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/Skiff.xcarchive" \
             MARKETING_VERSION="$NAME" CURRENT_PROJECT_VERSION="$CODE" \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" | tee "$RUNNER_TEMP/build.log" | grep -E '(error:|\*\* )' || true
-          test -d "$RUNNER_TEMP/Skiff.xcarchive/Products/Applications/Skiff.app" || { tail -150 "$RUNNER_TEMP/build.log"; exit 1; }
+          test -d "$RUNNER_TEMP/Skiff.xcarchive/Products/Applications/Skiff.app" || { tail -150 "$RUNNER_TEMP/build.log"; echo "::group::Errors"; grep -E ': error:' "$RUNNER_TEMP/build.log" | sort -u; echo "::endgroup::"; exit 1; }
           mkdir -p "$RUNNER_TEMP/ipa/Payload"
           cp -R "$RUNNER_TEMP/Skiff.xcarchive/Products/Applications/Skiff.app" "$RUNNER_TEMP/ipa/Payload/"
 
