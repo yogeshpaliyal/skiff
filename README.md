@@ -125,6 +125,18 @@ Get the APK from [Releases](../../releases/latest). Up to 1.2.0 the app was *Nuv
 (`dev.skiff`) is a new app for Android, so uninstall the old one. Every release is signed with the same release key,
 so a new version installs over the old one.
 
+## Stats
+
+Download counts, stars, forks and open issues are saved daily to the [`stats` branch](../../tree/stats) (CSV files and
+a summary in its README) by the **Stats snapshot** workflow ([stats.yml](.github/workflows/stats.yml)). It reads
+GitHub's own APIs only; nothing comes from the app. Totals add up every release file ever uploaded, so a re-uploaded
+file doesn't lose its earlier downloads.
+
+Repo views, clones and referrers are optional: GitHub keeps them for 14 days, and the workflow's own token can't read
+them. To keep them, create a fine-grained token for this repository with **Administration: Read-only** and save it as
+the `TRAFFIC_TOKEN` repository secret (Settings → Secrets and variables → Actions). Without it, the workflow skips
+them and saves the rest.
+
 ## Build
 
 ```bash
