@@ -1,11 +1,11 @@
 # Skiff stats
 
-Updated 2026-11-09T19:51:34+00:00 by the `Stats snapshot` workflow on [yogeshpaliyal/skiff](https://github.com/yogeshpaliyal/skiff).
+Updated 2026-11-10T12:50:11+00:00 by the `Stats snapshot` workflow on [yogeshpaliyal/skiff](https://github.com/yogeshpaliyal/skiff).
 Collected from GitHub's own APIs by this workflow; none of it comes from the Skiff app.
 
 | Metric | Value |
 | --- | --- |
-| Total downloads (all releases, APK and AAB) | 606 |
+| Total downloads (all releases, APK and AAB) | 610 |
 | Stars | 46 |
 | Forks | 2 |
 | Open issues and PRs | 1 |
@@ -17,8 +17,8 @@ Collected from GitHub's own APIs by this workflow; none of it comes from the Ski
 | v1.11.0 | 211 |
 | v1.10.0 | 125 |
 | v1.9.1 | 49 |
+| v1.11.1 | 47 |
 | v1.0.0 | 47 |
-| v1.11.1 | 43 |
 | v1.9.0 | 21 |
 | v1.8.0 | 20 |
 | v1.4.0 | 20 |
