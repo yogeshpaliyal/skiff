@@ -12,6 +12,9 @@ Send what you found on your phone to your Android TV / Google TV: share a page t
 - **A Trakt, Simkl, Letterboxd, MDBList or WeTrakr page** (a movie, a show, or one episode of it) opens the same way:
   Skiff finds its IMDb id through that site (or, failing that, searches its name), and an episode's link goes straight
   to that episode.
+- **A stream's link** (a video file or a live stream: `.m3u8`, `.mp4`, `.mkv`, `.mpd`, `rtsp://`…, pasted or shared)
+  plays in the TV's video player, VLC first (or MX Player, Just Player, Kodi: pick it under **Open with**). Over USB
+  debugging; over pairing the TV picks the app, which for a stream is often its browser.
 - **Any other link** (JioHotstar, YouTube, Netflix, Prime Video, Stremio…) opens in the TV app that opens such links, when the TV has one. How each
   kind of link opens is set by [link rules](RULES.md): a fix there reaches the app without a new release.
 

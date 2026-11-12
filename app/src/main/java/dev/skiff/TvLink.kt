@@ -211,18 +211,26 @@ object TvLink {
      * Off the main thread. The TV apps that open `link` (as the TV app wants it: Links.forTv), without the ones that
      * open any web page (browsers, the Downloader app, the system's browser stub): those aren't "the app for it".
      */
-    suspend fun linkApps(context: Context, host: String, link: String): List<LinkApp> =
-        if (Demo.on) Demo.linkApps(link) else withTv(context, host) { tv -> linkAppsOn(tv, Links.forTv(link)) }
+    suspend fun linkApps(context: Context, host: String, link: String): List<LinkApp> {
+        val type = Streams.type(link)
+        return if (Demo.on) Demo.linkApps(link, type) else withTv(context, host) { tv -> linkAppsOn(tv, Links.forTv(link), type) }
+    }
 
-    private fun linkAppsOn(tv: Dadb, link: String): List<LinkApp> {
+    /**
+     * `type`: a stream's ("video/ *", Streams), asked with it as well: the TV's players open a stream's link only when
+     * told what it is, and no app but a browser says it opens it by the link alone.
+     */
+    private fun linkAppsOn(tv: Dadb, link: String, type: String?): List<LinkApp> {
         val query = "cmd package query-activities --brief -a android.intent.action.VIEW -d"
-        val out = tv.shell("$query ${q(link)}; echo '$SPLIT'; $query 'https://example.com/'").output
-        val generic = components(out.substringAfter(SPLIT, "")).toSet()
-        val apps = components(out.substringBefore(SPLIT))
+        val typed = if (type != null) "; echo '$SPLIT'; $query ${q(link)} -t ${q(type)}" else ""
+        val out = tv.shell("$query 'https://example.com/'; echo '$SPLIT'; $query ${q(link)}$typed").output
+        val parts = out.split(SPLIT)
+        val generic = components(parts[0]).toSet()
+        val apps = (components(parts.getOrNull(2).orEmpty()) + components(parts.getOrNull(1).orEmpty()))
             .filter { it !in generic }
             .distinctBy { it.substringBefore('/') }
             .map { LinkApp(it.substringBefore('/'), it) }
-        return Rules.preferred(link, apps) { it.pkg }
+        return if (type != null) Streams.preferred(apps) { it.pkg } else Rules.preferred(link, apps) { it.pkg }
     }
 
     /**
@@ -230,18 +238,25 @@ object TvLink {
      * rule's flags: by default a fresh start of its screen (NEW_TASK | CLEAR_TASK), so an app already open, like
      * JioHotstar, reads the link instead of just coming to the front.
      */
-    suspend fun openLink(context: Context, host: String, link: String, component: String?): String =
-        if (Demo.on) { delay(600); "" } else withTv(context, host) { tv ->
+    suspend fun openLink(context: Context, host: String, link: String, component: String?): String {
+        if (Demo.on) { delay(600); return "" }
+        val type = Streams.type(link)
+        return withTv(context, host) { tv ->
             val tvLink = Links.forTv(link)
-            val apps = linkAppsOn(tv, tvLink)
+            val apps = linkAppsOn(tv, tvLink, type)
             val target = apps.firstOrNull { it.component == component } ?: apps.firstOrNull()
-                ?: error(context.getString(R.string.tv_no_app_for_link, Links.site(link)))
-            val flags = "0x" + Integer.toHexString(Rules.flags(link))
-            val r = tv.shell("am start -a android.intent.action.VIEW -d ${q(tvLink)} -n ${q(target.component)} -f $flags")
+                ?: error(context.getString(if (type != null) R.string.tv_no_player else R.string.tv_no_app_for_link, Links.site(link)))
+            val r = tv.shell(linkCommand(tvLink, target.component, Rules.flags(link), type))
             val out = r.allOutput.trim()
             if (r.exitCode != 0 || out.contains("Error")) error(out.ifEmpty { context.getString(R.string.tv_said_no, r.exitCode) })
             out
         }
+    }
+
+    /** The shell command that opens a link in an app; a stream's with its type (VLC reads it as a video, not a page). */
+    fun linkCommand(link: String, component: String, flags: Int, type: String?): String =
+        "am start -a android.intent.action.VIEW -d ${q(link)}" + (if (type != null) " -t ${q(type)}" else "") +
+            " -n ${q(component)} -f 0x" + Integer.toHexString(flags)
 
     /** "com.nuvio.tv/.MainActivity" → "com.nuvio.tv/com.nuvio.tv.MainActivity", from query-activities' lines. */
     private fun components(text: String): List<String> = text.lines().map { it.trim() }

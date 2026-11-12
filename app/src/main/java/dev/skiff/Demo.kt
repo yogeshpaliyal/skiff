@@ -40,7 +40,11 @@ object Demo {
     fun nuvioApps() = listOf(TvLink.NuvioApp("com.nuvio.tv", "com.nuvio.tv/com.nuvio.tv.MainActivity", "1.0.0", "Play Store"))
 
     /** The TV's apps for a link: the one for its site first. */
-    fun linkApps(link: String): List<TvLink.LinkApp> {
+    fun linkApps(link: String, type: String? = null): List<TvLink.LinkApp> {
+        if (type != null) return listOf(
+            TvLink.LinkApp("org.videolan.vlc", "org.videolan.vlc/org.videolan.vlc.StartActivity"),
+            TvLink.LinkApp("com.brouken.player", "com.brouken.player/com.brouken.player.PlayerActivity"),
+        )
         val youtube = TvLink.LinkApp("com.google.android.youtube.tv", "com.google.android.youtube.tv/com.google.android.apps.youtube.tv.activity.ShellActivity")
         val hotstar = TvLink.LinkApp("in.startv.hotstar", "in.startv.hotstar/com.hotstar.MainActivity")
         return if ("hotstar" in link) listOf(hotstar) else listOf(youtube)
