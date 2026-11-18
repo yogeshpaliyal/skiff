@@ -30,9 +30,10 @@ interface TvKeys : AutoCloseable {
 
     /**
      * Moves the TV's mouse pointer by (dx, dy), in a mouse's counts, with `buttons` held ([BUTTON_LEFT]…: a click is
-     * a report with it, then one without) and the wheel turned by `wheel` (up is positive).
+     * a report with it, then one without), the wheel turned by `wheel` (up is positive) and tilted by `pan` (right is
+     * positive: rows that go sideways).
      */
-    suspend fun mouse(dx: Int, dy: Int, buttons: Int = 0, wheel: Int = 0) {}
+    suspend fun mouse(dx: Int, dy: Int, buttons: Int = 0, wheel: Int = 0, pan: Int = 0) {}
 
     companion object {
         const val BUTTON_LEFT = 1

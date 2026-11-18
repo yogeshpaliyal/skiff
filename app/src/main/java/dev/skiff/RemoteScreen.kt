@@ -272,10 +272,10 @@ fun RemoteScreen(host: String, tvName: String, onBack: () -> Unit) {
         if (!pointing) return@LaunchedEffect
         cursorError = null
         while (true) {
-            val (dx, dy, wheel) = motion.take()
-            if (dx != 0 || dy != 0 || wheel != 0) {
+            val m = motion.take()
+            if (!m.none) {
                 try {
-                    r.mouse(dx, dy, wheel = wheel)
+                    r.mouse(m.dx, m.dy, wheel = m.wheel, pan = m.pan)
                 } catch (e: Exception) {
                     Telemetry.error(context, "remote_cursor", e)
                     if (!r.isOpen) return@LaunchedEffect reconnect(null)
@@ -387,7 +387,7 @@ fun RemoteScreen(host: String, tvName: String, onBack: () -> Unit) {
 
             // 1. The D-pad: the hero. Or, switched to the cursor, the touchpad.
             if (pointing) {
-                Touchpad(ready, air, onMove = motion::move, onWheel = motion::turn, onClick = ::click)
+                Touchpad(ready, air, onMove = motion::move, onWheel = motion::turn, onPan = motion::tilt, onClick = ::click)
             } else {
                 DPad(ready) { press(it) }
             }
