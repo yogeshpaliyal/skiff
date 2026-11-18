@@ -141,7 +141,7 @@ object TvLink {
         private var hid: dadb.AdbShellStream? = null
         private val pointer = Mutex()
 
-        override suspend fun mouse(dx: Int, dy: Int, buttons: Int, wheel: Int) = pointer.withLock {
+        override suspend fun mouse(dx: Int, dy: Int, buttons: Int, wheel: Int, pan: Int) = pointer.withLock {
             withContext(Dispatchers.IO) {
                 val m = hid ?: tv.openShell("hid -").also {
                     it.write("""{"id":1,"command":"register","name":"Skiff cursor","vid":0x1209,"pid":0x0001,"bus":"usb","descriptor":[$MOUSE]}""" + "\n")
@@ -152,15 +152,18 @@ object TvLink {
                     var x = dx
                     var y = dy
                     var w = wheel
+                    var p = pan
                     do {
                         val sx = x.coerceIn(-127, 127)
                         val sy = y.coerceIn(-127, 127)
                         val sw = w.coerceIn(-127, 127)
-                        m.write("""{"id":1,"command":"report","report":[$buttons,${sx and 0xff},${sy and 0xff},${sw and 0xff}]}""" + "\n")
+                        val sp = p.coerceIn(-127, 127)
+                        m.write("""{"id":1,"command":"report","report":[$buttons,${sx and 0xff},${sy and 0xff},${sw and 0xff},${sp and 0xff}]}""" + "\n")
                         x -= sx
                         y -= sy
                         w -= sw
-                    } while (x != 0 || y != 0 || w != 0)
+                        p -= sp
+                    } while (x != 0 || y != 0 || w != 0 || p != 0)
                 } catch (e: Exception) {
                     // The TV ended the command: a new mouse at the next move.
                     runCatching { m.close() }
@@ -177,14 +180,15 @@ object TvLink {
     }
 
     /**
-     * A mouse's HID report descriptor: three buttons, then X, Y and the wheel, each a relative byte. Its reports are
-     * those four bytes.
+     * A mouse's HID report descriptor: three buttons, then X, Y, the wheel and its tilt (AC Pan, which the TV reads
+     * as a horizontal wheel), each a relative byte. Its reports are those five bytes.
      */
     private val MOUSE = listOf(
         0x05, 0x01, 0x09, 0x02, 0xA1, 0x01, 0x09, 0x01, 0xA1, 0x00,
         0x05, 0x09, 0x19, 0x01, 0x29, 0x03, 0x15, 0x00, 0x25, 0x01, 0x95, 0x03, 0x75, 0x01, 0x81, 0x02,
         0x95, 0x01, 0x75, 0x05, 0x81, 0x03,
         0x05, 0x01, 0x09, 0x30, 0x09, 0x31, 0x09, 0x38, 0x15, 0x81, 0x25, 0x7F, 0x75, 0x08, 0x95, 0x03, 0x81, 0x06,
+        0x05, 0x0C, 0x0A, 0x38, 0x02, 0x15, 0x81, 0x25, 0x7F, 0x75, 0x08, 0x95, 0x01, 0x81, 0x06,
         0xC0, 0xC0,
     ).joinToString(",") { "0x%02x".format(it) }
 

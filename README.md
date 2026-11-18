@@ -29,7 +29,8 @@ Arrows, volume and seek repeat when held, and the phone's own volume buttons tur
 **Quick Settings tile** (Skiff remote) opens it from anywhere.
 
 **Cursor** (over USB debugging) swaps the D-pad for a touchpad and puts a mouse pointer on the TV, for apps that
-don't follow the D-pad: drag to move it, tap to click, the strip at the edge scrolls. With **Air** on, turning the
+don't follow the D-pad: drag to move it, tap to click, the strip at the edge scrolls up and down and the one along
+the bottom scrolls rows left and right. With **Air** on, turning the
 phone, held like a remote, moves it (the gyroscope). The pointer is a USB mouse made up on the TV with Android's own
 `hid` command (Android 9 and later); pairing's protocol has no pointer.
 

@@ -6,6 +6,7 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -38,8 +40,13 @@ import androidx.compose.ui.unit.dp
 import kotlin.math.abs
 import kotlin.math.sqrt
 
+/** What one report sends: the pointer's move, the wheel's turn (up is positive) and its tilt (right is positive). */
+data class Counts(val dx: Int, val dy: Int, val wheel: Int, val pan: Int) {
+    val none: Boolean get() = dx == 0 && dy == 0 && wheel == 0 && pan == 0
+}
+
 /**
- * The pointer's moves (in a mouse's counts) and wheel turns, gathered as the gyroscope and the finger make them, and
+ * The pointer's moves (in a mouse's counts) and wheel turns and tilts, gathered as the gyroscope and the finger make them, and
  * taken whole by the loop that sends them: one report at a time, so the TV never falls behind the phone. On the main
  * thread only.
  */
@@ -47,18 +54,20 @@ class Motion {
     private var x = 0f
     private var y = 0f
     private var wheel = 0f
+    private var pan = 0f
 
     fun move(dx: Float, dy: Float) { x += dx; y += dy }
     fun turn(n: Float) { wheel += n }
+    fun tilt(n: Float) { pan += n }
 
     /** The whole counts gathered so far (the fractions wait for the next take). */
-    fun take(): Triple<Int, Int, Int> {
-        val t = Triple(x.toInt(), y.toInt(), wheel.toInt())
-        x -= t.first; y -= t.second; wheel -= t.third
+    fun take(): Counts {
+        val t = Counts(x.toInt(), y.toInt(), wheel.toInt(), pan.toInt())
+        x -= t.dx; y -= t.dy; wheel -= t.wheel; pan -= t.pan
         return t
     }
 
-    fun clear() { x = 0f; y = 0f; wheel = 0f }
+    fun clear() { x = 0f; y = 0f; wheel = 0f; pan = 0f }
 }
 
 object AirCursor {
@@ -125,14 +134,23 @@ fun AirMotion(on: Boolean, onMove: (Float, Float) -> Unit) {
 }
 
 /**
- * The touchpad, in the D-pad's place: drag to move the pointer, tap to click; the strip at its right edge scrolls
- * (drag down to see what's above, as on a touch screen).
+ * The touchpad, in the D-pad's place: drag to move the pointer, tap to click; the strip at its right edge scrolls up
+ * and down, the one along its bottom left and right (drag down to see what's above, right to see what's to the left,
+ * as on a touch screen).
  */
 @Composable
-fun Touchpad(enabled: Boolean, air: Boolean, onMove: (Float, Float) -> Unit, onWheel: (Float) -> Unit, onClick: () -> Unit) {
+fun Touchpad(
+    enabled: Boolean,
+    air: Boolean,
+    onMove: (Float, Float) -> Unit,
+    onWheel: (Float) -> Unit,
+    onPan: (Float) -> Unit,
+    onClick: () -> Unit,
+) {
     val density = LocalDensity.current
     val move by rememberUpdatedState(onMove)
     val wheel by rememberUpdatedState(onWheel)
+    val pan by rememberUpdatedState(onPan)
     val click by rememberUpdatedState(onClick)
     // Counts per dp the finger moves; a wheel step per 24 dp.
     val perPx = 2.5f / density.density
@@ -143,52 +161,72 @@ fun Touchpad(enabled: Boolean, air: Boolean, onMove: (Float, Float) -> Unit, onW
         tonalElevation = 2.dp,
         modifier = Modifier.fillMaxWidth().widthIn(max = 340.dp).aspectRatio(1f),
     ) {
-        Row(Modifier.fillMaxSize()) {
-            Box(
-                Modifier.weight(1f).fillMaxHeight()
-                    .then(
-                        if (!enabled) Modifier else Modifier
-                            .pointerInput(Unit) { detectTapGestures(onTap = { click() }) }
-                            .pointerInput(Unit) {
-                                detectDragGestures { change, drag ->
+        Column(Modifier.fillMaxSize()) {
+            Row(Modifier.weight(1f).fillMaxWidth()) {
+                Box(
+                    Modifier.weight(1f).fillMaxHeight()
+                        .then(
+                            if (!enabled) Modifier else Modifier
+                                .pointerInput(Unit) { detectTapGestures(onTap = { click() }) }
+                                .pointerInput(Unit) {
+                                    detectDragGestures { change, drag ->
+                                        change.consume()
+                                        move(drag.x * perPx, drag.y * perPx)
+                                    }
+                                },
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Column(
+                        Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Icon(AppIcons.Mouse, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            if (air) "Point the phone at the TV and turn it to move the cursor. Drag here too; tap to click."
+                            else "Drag to move the cursor; tap to click.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                }
+                // The scroll strip.
+                Surface(
+                    shape = RoundedCornerShape(28.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    modifier = Modifier.width(56.dp).fillMaxHeight().padding(vertical = 18.dp).padding(end = 10.dp)
+                        .then(
+                            if (!enabled) Modifier else Modifier.pointerInput(Unit) {
+                                detectVerticalDragGestures { change, dy ->
                                     change.consume()
-                                    move(drag.x * perPx, drag.y * perPx)
+                                    wheel(dy / stepPx)
                                 }
                             },
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                Column(
-                    Modifier.padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ),
                 ) {
-                    Icon(AppIcons.Mouse, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(
-                        if (air) "Point the phone at the TV and turn it to move the cursor. Drag here too; tap to click."
-                        else "Drag to move the cursor; tap to click.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center,
-                    )
+                    Box(contentAlignment = Alignment.Center) {
+                        Text("Scroll", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
-            // The scroll strip.
+            // The side-scroll strip, for rows that go left and right. It stops short of the scroll strip's column.
             Surface(
                 shape = RoundedCornerShape(28.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                modifier = Modifier.width(56.dp).fillMaxHeight().padding(vertical = 18.dp).padding(end = 10.dp)
+                modifier = Modifier.fillMaxWidth().height(56.dp).padding(start = 36.dp, end = 66.dp).padding(bottom = 10.dp)
                     .then(
                         if (!enabled) Modifier else Modifier.pointerInput(Unit) {
-                            detectVerticalDragGestures { change, dy ->
+                            detectHorizontalDragGestures { change, dx ->
                                 change.consume()
-                                wheel(dy / stepPx)
+                                pan(-dx / stepPx)
                             }
                         },
                     ),
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Text("Scroll", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Scroll sideways", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
