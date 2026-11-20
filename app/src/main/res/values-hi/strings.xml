@@ -266,4 +266,8 @@
     <string name="log_key">बटन %1$s</string>
     <string name="log_after_reconnecting">%1$s (फिर से कनेक्ट होने के बाद)</string>
     <string name="log_typed">“%1$s” टाइप किया गया</string>
+    <string name="no_player_for_stream">%1$s पर कोई वीडियो प्लेयर नहीं</string>
+    <string name="no_player_for_stream_install">%1$s पर कोई वीडियो प्लेयर यह स्ट्रीम नहीं खोलता। TV पर VLC (या कोई और प्लेयर) इंस्टॉल करें, फिर दोबारा कोशिश करें।</string>
+    <string name="tv_no_player">TV पर कोई वीडियो प्लेयर यह स्ट्रीम नहीं खोलता। TV पर VLC इंस्टॉल करें।</string>
+    <string name="hint_stream_pairing">पेयरिंग में TV स्ट्रीम के लिए ऐप खुद चुनता है। इसे VLC में चलाने के लिए TV पर USB डीबगिंग चालू करें।</string>
 </resources>

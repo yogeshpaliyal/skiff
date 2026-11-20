@@ -267,4 +267,8 @@
     <string name="log_key">Touche %1$s</string>
     <string name="log_after_reconnecting">%1$s (après reconnexion)</string>
     <string name="log_typed">Saisi « %1$s »</string>
+    <string name="no_player_for_stream">Aucun lecteur vidéo sur %1$s</string>
+    <string name="no_player_for_stream_install">Aucun lecteur vidéo de %1$s n’ouvre ce flux. Installez VLC (ou un autre lecteur) sur la TV, puis réessayez.</string>
+    <string name="tv_no_player">Aucun lecteur vidéo de la TV n’ouvre ce flux. Installez VLC sur la TV.</string>
+    <string name="hint_stream_pairing">En appairage, la TV choisit l’app pour un flux. Pour le lire dans VLC, activez le débogage USB sur la TV.</string>
 </resources>

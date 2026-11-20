@@ -289,6 +289,8 @@ private fun RemoteScreen(shared: Title.Shared?, onSharedUsed: () -> Unit, openSc
     val hostOk = host.trim().isNotEmpty()
     val idOk = Title.isImdbId(imdbId)
     val linkOk = link != null
+    // A stream's link (a video file, .m3u8, rtsp://…): played by the TV's video player (VLC…), told it's a video.
+    val streamLink = link?.let(Streams::byLink) != null
     // How titles and links reach the TV: USB debugging first (Open with lists the TV's apps; Nuvio goes straight to
     // the streams), else pairing (the TV picks the app; Nuvio opens the title's page: nuvio://movie/tt…). Settings
     // can fix it to one. Checked again when the remote or Settings close (pairing and allowing happen there).
@@ -678,8 +680,10 @@ private fun RemoteScreen(shared: Title.Shared?, onSharedUsed: () -> Unit, openSc
                     busy -> null
                     !hostOk -> stringResource(R.string.hint_pick_tv)
                     needsSetup -> stringResource(R.string.hint_connect, tvLabel)
+                    linkByPairing && streamLink -> stringResource(R.string.hint_stream_pairing)
                     linkByPairing -> null
                     linkOk && linkAppsLoading -> stringResource(R.string.hint_checking_link_app)
+                    linkOk && linkApps.isEmpty() && streamLink -> stringResource(R.string.no_player_for_stream, tvLabel)
                     linkOk && linkApps.isEmpty() -> stringResource(R.string.no_app_for_link, tvLabel, link?.let(Links::site).orEmpty())
                     !idOk && !linkOk -> stringResource(R.string.hint_share)
                     else -> null
@@ -1136,7 +1140,8 @@ private fun RemoteScreen(shared: Title.Shared?, onSharedUsed: () -> Unit, openSc
                         }
                         linkApps.isEmpty() -> NoteCard(
                             Icons.Rounded.Warning,
-                            stringResource(R.string.no_app_for_link_install, tvLabel, link?.let(Links::site).orEmpty()),
+                            if (streamLink) stringResource(R.string.no_player_for_stream_install, tvLabel)
+                            else stringResource(R.string.no_app_for_link_install, tvLabel, link?.let(Links::site).orEmpty()),
                             error = true,
                         )
                         else -> for (app in linkApps) {

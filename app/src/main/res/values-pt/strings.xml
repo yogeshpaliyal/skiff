@@ -267,4 +267,8 @@
     <string name="log_key">Tecla %1$s</string>
     <string name="log_after_reconnecting">%1$s (após reconectar)</string>
     <string name="log_typed">Digitado “%1$s”</string>
+    <string name="no_player_for_stream">Nenhum player de vídeo em %1$s</string>
+    <string name="no_player_for_stream_install">Nenhum player de vídeo em %1$s abre este stream. Instale o VLC (ou outro player) na TV e tente de novo.</string>
+    <string name="tv_no_player">Nenhum player de vídeo na TV abre este stream. Instale o VLC na TV.</string>
+    <string name="hint_stream_pairing">No pareamento, a TV escolhe o app para um stream. Para tocá-lo no VLC, ative a depuração USB na TV.</string>
 </resources>

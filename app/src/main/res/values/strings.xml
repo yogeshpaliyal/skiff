@@ -271,4 +271,8 @@
     <string name="log_key">Key %1$s</string>
     <string name="log_after_reconnecting">%1$s (after reconnecting)</string>
     <string name="log_typed">Typed “%1$s”</string>
+    <string name="no_player_for_stream">No video player on %1$s</string>
+    <string name="no_player_for_stream_install">No video player on %1$s opens this stream. Install VLC (or another player) on the TV, then try again.</string>
+    <string name="tv_no_player">No video player on the TV opens this stream. Install VLC on the TV.</string>
+    <string name="hint_stream_pairing">Over pairing, the TV picks the app for a stream. To play it in VLC, turn on USB debugging on the TV.</string>
 </resources>

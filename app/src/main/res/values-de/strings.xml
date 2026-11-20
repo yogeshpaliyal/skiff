@@ -266,4 +266,8 @@
     <string name="log_key">Taste %1$s</string>
     <string name="log_after_reconnecting">%1$s (nach erneutem Verbinden)</string>
     <string name="log_typed">„%1$s“ getippt</string>
+    <string name="no_player_for_stream">Kein Videoplayer auf %1$s</string>
+    <string name="no_player_for_stream_install">Kein Videoplayer auf %1$s öffnet diesen Stream. Installiere VLC (oder einen anderen Player) auf dem Fernseher und versuche es erneut.</string>
+    <string name="tv_no_player">Kein Videoplayer auf dem Fernseher öffnet diesen Stream. Installiere VLC auf dem Fernseher.</string>
+    <string name="hint_stream_pairing">Bei der Kopplung wählt der Fernseher die App für einen Stream. Um ihn in VLC abzuspielen, aktiviere USB-Debugging auf dem Fernseher.</string>
 </resources>

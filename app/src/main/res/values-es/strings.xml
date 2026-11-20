@@ -267,4 +267,8 @@
     <string name="log_key">Tecla %1$s</string>
     <string name="log_after_reconnecting">%1$s (tras reconectar)</string>
     <string name="log_typed">Escrito “%1$s”</string>
+    <string name="no_player_for_stream">No hay reproductor de vídeo en %1$s</string>
+    <string name="no_player_for_stream_install">Ningún reproductor de vídeo de %1$s abre esta transmisión. Instala VLC (u otro reproductor) en la TV y vuelve a intentarlo.</string>
+    <string name="tv_no_player">Ningún reproductor de vídeo de la TV abre esta transmisión. Instala VLC en la TV.</string>
+    <string name="hint_stream_pairing">Con el emparejamiento, la TV elige la app para una transmisión. Para reproducirla en VLC, activa la depuración USB en la TV.</string>
 </resources>

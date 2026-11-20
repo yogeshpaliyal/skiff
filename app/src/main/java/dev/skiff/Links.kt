@@ -42,6 +42,10 @@ object Links {
      * page's tags, then the slug. Else `fallback` (the shared page's title), else the site.
      */
     suspend fun page(link: String, fallback: String?): Page = withContext(Dispatchers.IO) {
+        // A stream (a video file, an .m3u8…): no page to read; named by the share, else its file.
+        if (Streams.byLink(link) != null) {
+            return@withContext Page(fallback?.takeIf { it.isNotBlank() } ?: Streams.name(link) ?: site(link))
+        }
         val how = Rules.ruleFor(link)?.title
         val fromWeb = runCatching {
             when {

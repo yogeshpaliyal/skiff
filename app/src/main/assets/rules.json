@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "about": "How Skiff opens links on the TV. The first rule whose match fits the link is used; a link no rule matches is sent as it is to whichever TV app opens it. See RULES.md.",
   "rules": [
     {
@@ -63,6 +63,11 @@
     "com.spotify.tv.android": "Spotify",
     "com.stremio.one": "Stremio",
     "com.nuvio.tv": "Nuvio",
-    "com.nuvio.app": "Nuvio"
+    "com.nuvio.app": "Nuvio",
+    "org.videolan.vlc": "VLC",
+    "com.mxtech.videoplayer.ad": "MX Player",
+    "com.mxtech.videoplayer.pro": "MX Player Pro",
+    "com.brouken.player": "Just Player",
+    "org.xbmc.kodi": "Kodi"
   }
 }
