@@ -300,6 +300,9 @@ object TvLink {
      * Skiff created would open that title again and again (issue #18); this way Nuvio's screen is the icon's (it opens
      * Nuvio's home when it's created again) and the title reaches it as a new intent, read once. Without a launcher
      * screen, as before: Nuvio's MainActivity, with the title.
+     *
+     * Either way Nuvio's task is cleared first (CLEAR_TASK), so the title lands on a fresh Nuvio home rather than on
+     * whatever Nuvio was showing: on another title's "ready to play" screen, a new title didn't replace it (issue #16).
      */
     fun command(t: Title, component: String, stremio: Boolean = false, launcher: String? = null): String = buildString {
         if (stremio) {
@@ -308,13 +311,14 @@ object TvLink {
             return@buildString
         }
         if (launcher != null) {
-            // NEW_TASK | RESET_TASK_IF_NEEDED, as the home screen starts it; -W: done before the title is sent.
+            // NEW_TASK | CLEAR_TASK: as the home screen starts it, on a fresh Nuvio home (#16); -W: done before the title.
             append("am start -W -n ").append(q(launcher))
-            append(" -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -f 0x10200000 > /dev/null; ")
+            append(" -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -f 0x10008000 > /dev/null; ")
             // NEW_TASK | CLEAR_TOP | SINGLE_TOP: to that same screen, as a new intent (Nuvio's screens are singleTop).
             append("am start -n ").append(q(launcher)).append(" -f 0x34000000")
         } else {
-            append("am start -n ").append(q(component)).append(" -f 0x14000000")
+            // NEW_TASK | CLEAR_TOP | CLEAR_TASK: a fresh MainActivity, with the title (#16).
+            append("am start -n ").append(q(component)).append(" -f 0x14008000")
         }
         append(" --es contentId ").append(q(t.imdbId))
         append(" --es contentType ").append(if (t.series) "series" else "movie")
