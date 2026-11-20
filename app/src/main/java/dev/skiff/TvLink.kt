@@ -263,12 +263,43 @@ object TvLink {
         else -> installer
     }
 
-    /** The shell command, with every value quoted for the TV's shell. Stremio: its link to the stream list. */
-    fun command(t: Title, component: String, stremio: Boolean = false): String = buildString {
-        append("am start -n ").append(q(component)).append(" -f 0x14000000")
+    /**
+     * The screen Nuvio's home-screen icon starts (one of its `launcher.AppIcon…` screens: MainActivity, by another
+     * name for each icon), or null when that isn't Nuvio's own screen (a fork with a splash screen first).
+     */
+    private fun launcherOf(tv: Dadb, pkg: String): String? {
+        val resolve = "cmd package resolve-activity --brief -a android.intent.action.MAIN -c"
+        val out = tv.shell("$resolve android.intent.category.LEANBACK_LAUNCHER ${q(pkg)}; echo '$SPLIT'; $resolve android.intent.category.LAUNCHER ${q(pkg)}").output
+        return (components(out.substringBefore(SPLIT)) + components(out.substringAfter(SPLIT, "")))
+            .firstOrNull { it.substringBefore('/') == pkg && isNuvioScreen(it.substringAfter('/')) }
+    }
+
+    private fun isNuvioScreen(cls: String) = cls == NUVIO_CLASS || cls.startsWith("com.nuvio.tv.launcher.AppIcon")
+
+    /**
+     * The shell command, with every value quoted for the TV's shell. Stremio: its link to the stream list.
+     *
+     * Nuvio, with its `launcher` screen: first started as its home-screen icon starts it, then given the title. Nuvio
+     * reads a title from the intent its screen was created with, every time that screen is created again: when the
+     * TV, short of memory, has closed it in the background and it's opened again, from the home screen too. A screen
+     * Skiff created would open that title again and again (issue #18); this way Nuvio's screen is the icon's (it opens
+     * Nuvio's home when it's created again) and the title reaches it as a new intent, read once. Without a launcher
+     * screen, as before: Nuvio's MainActivity, with the title.
+     */
+    fun command(t: Title, component: String, stremio: Boolean = false, launcher: String? = null): String = buildString {
         if (stremio) {
+            append("am start -n ").append(q(component)).append(" -f 0x14000000")
             append(" -a android.intent.action.VIEW -d ").append(q(t.stremioLink(streams = true)))
             return@buildString
+        }
+        if (launcher != null) {
+            // NEW_TASK | RESET_TASK_IF_NEEDED, as the home screen starts it; -W: done before the title is sent.
+            append("am start -W -n ").append(q(launcher))
+            append(" -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -f 0x10200000 > /dev/null; ")
+            // NEW_TASK | CLEAR_TOP | SINGLE_TOP: to that same screen, as a new intent (Nuvio's screens are singleTop).
+            append("am start -n ").append(q(launcher)).append(" -f 0x34000000")
+        } else {
+            append("am start -n ").append(q(component)).append(" -f 0x14000000")
         }
         append(" --es contentId ").append(q(t.imdbId))
         append(" --es contentType ").append(if (t.series) "series" else "movie")
@@ -289,7 +320,8 @@ object TvLink {
             val apps = detect(context, tv)
             val target = apps.firstOrNull { it.component == component } ?: apps.firstOrNull()
                 ?: error(context.getString(R.string.tv_no_nuvio_app))
-            val r = tv.shell(command(t, target.component, target.stremio))
+            val launcher = if (target.stremio) null else runCatching { launcherOf(tv, target.pkg) }.getOrNull()
+            val r = tv.shell(command(t, target.component, target.stremio, launcher))
             val out = r.allOutput.trim()
             if (r.exitCode != 0 || out.contains("Error")) error(out.ifEmpty { context.getString(R.string.tv_said_no, r.exitCode) })
             out
